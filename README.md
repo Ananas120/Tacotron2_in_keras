@@ -4,7 +4,7 @@ This is an implementation of Tacotron-2 architecture in Keras.
 It's based on the implementation (in tensorflow) of this repository : 
 https://github.com/Rayhane-mamah/Tacotron-2
 The implementation is not not done yet : 
-- Attention mechanism (LocationSensitiveAttention) : Done (*) (**) (***)
+- Attention mechanism (LocationSensitiveAttention) : Done (*, **, ***)
 - ZoneoutLSTM : Done (*)
 - Different blocks of Tacotron model : Done (*)
 - training / prediction : not done (i will do this soon)
