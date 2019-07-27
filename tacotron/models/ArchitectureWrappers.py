@@ -7,6 +7,8 @@ from tensorflow.python.ops import array_ops, math_ops, check_ops, rnn_cell_impl,
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.util import nest
 
+from tacotron.models.modules import *
+from tacotron.models.new_layers import *
 
 class TacotronEncoderCell:
     def __init__(self, convolutional_layers, lstm_layer):
@@ -32,12 +34,12 @@ class TacotronDecoderCell:
                 
     
     
-    def __call__(self, inputs):
+    def __call__(self, inputs, debug=False):
         encoder_out_seq, decoder_out_seq = inputs
         prenet_output = self._prenet(decoder_out_seq)
                         
         
-        context_vector, alignments = self._attention([encoder_out_seq, prenet_output])
+        context_vector, alignments = self._attention([encoder_out_seq, prenet_output], verbose=debug)
         
         projections_input = Concatenate(axis=-1)([prenet_output, context_vector])
         

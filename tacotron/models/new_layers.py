@@ -2,7 +2,6 @@ import keras
 import tensorflow as tf
 import keras.backend as K
 
-
 from keras.layers import *
 from tensorflow.python.framework.tensor_shape import *
 from tensorflow.python.ops import rnn_cell_impl, array_ops, math_ops
@@ -84,11 +83,10 @@ class ZoneoutLSTMCell(Layer):
             
         return output, [c, h]
 
-    
 
-
+        
 class LocationSensitiveAttentionLayer(Layer):
-    def __init__(self, units, filters, rnn_cell=None, kernel=3, smoothing=False, cumulate_weights=True, **kwargs):
+    def __init__(self, memory, units, filters, rnn_cell=None, kernel=3, smoothing=False, cumulate_weights=True, **kwargs):
         super(LocationSensitiveAttentionLayer, self).__init__(**kwargs)
         self.units = units
         self.filters = filters
@@ -96,8 +94,12 @@ class LocationSensitiveAttentionLayer(Layer):
         
         self.location_convolution = Conv1D(filters=filters, kernel_size=kernel, padding='same', bias_initializer='zeros', name='location_features_convolution')
         self.location_layer = Dense(units, use_bias=False, name='location_features_layer')
-        self.query_layer = None
+        self.query_layer = Dense(units, use_bias=False)
+        self.memory_layer = Dense(units, use_bias=False)
         self.rnn_cell = rnn_cell
+        
+        self.values = memory
+        self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
     
     def build(self, input_shape):
         assert isinstance(input_shape, list)
@@ -110,6 +112,16 @@ class LocationSensitiveAttentionLayer(Layer):
                                    shape=(self.units,),
                                    initializer='uniform',
                                    trainable=True)
+        if self.memory_layer:
+            self._trainable_weights += self.memory_layer._trainable_weights
+        if self.query_layer:
+            if not self.query_layer.built: 
+                if self.rnn_cell:
+                    print(self.rnn_cell.compute_output_shape(dec_out_seq))
+                    self.query_layer.build(self.rnn_cell.compute_output_shape(dec_out_seq)[0])
+                else:
+                    self.query_layer.build(dec_out_seq)
+            self._trainable_weights += self.query_layer._trainable_weights
         if self.rnn_cell:
             rnn_input_shape = (enc_out_seq[0], 1, dec_out_seq[-1] + enc_out_seq[-1])
             self.rnn_cell.build(rnn_input_shape)
@@ -132,6 +144,8 @@ class LocationSensitiveAttentionLayer(Layer):
         """
         assert isinstance(inputs, list)
         encoder_out_seq, decoder_out_seq = inputs
+        encoder_out_seq = self.values
+        keys = self.keys
         if verbose:
             print("encoder_out_seq shape (batch_size, input_timesteps, encoder_size): {}".format(encoder_out_seq.shape))
             print("decoder_out_seq shape (batch_size, last_outputs_timesteps, decoder_size): {}".format(decoder_out_seq.shape))
@@ -177,7 +191,7 @@ class LocationSensitiveAttentionLayer(Layer):
                 print("processed_location_features : {}".format(processed_location_features.shape))
                 
             
-            e_i = K.sum(self.v_a * K.tanh(encoder_out_seq + processed_query + processed_location_features + self.b_a), [2])
+            e_i = K.sum(self.v_a * K.tanh(self.keys + processed_query + processed_location_features + self.b_a), [2])
             e_i = K.softmax(e_i)
             
             if self._cumulate:
@@ -203,11 +217,11 @@ class LocationSensitiveAttentionLayer(Layer):
             if verbose:
                 print("expanded_alignments : {}".format(expanded_alignments.shape))
             
-            c_i = math_ops.matmul(expanded_alignments, encoder_out_seq)
+            c_i = math_ops.matmul(expanded_alignments, self.values)
             c_i = K.squeeze(c_i, 1)
             
             if verbose:
-                print("c_i : {}".format(c_i.shape))
+                print("C_i : {}".format(c_i.shape))
             return c_i, [c_i]
 
         def create_initial_state(inputs, hidden_size):
@@ -223,8 +237,8 @@ class LocationSensitiveAttentionLayer(Layer):
             fake_input = K.expand_dims(fake_input, 1)
             return fake_input
 
-        fake_state_c = create_initial_state(encoder_out_seq, encoder_out_seq.shape[-1])
-        fake_state_e = create_initial_state(encoder_out_seq, K.shape(encoder_out_seq)[1])
+        fake_state_c = create_initial_state(self.values, self.values.shape[-1])
+        fake_state_e = create_initial_state(self.values, K.shape(self.values)[1])
         if self.rnn_cell:
             cell_initial_state = self.rnn_cell.get_initial_state(get_fake_cell_input(fake_state_c))
             initial_states_e = [fake_state_e, fake_state_c, *cell_initial_state]

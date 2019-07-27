@@ -1,7 +1,9 @@
 
 from keras.layers import *
 
-def conv1d(input_data, kernel_size, channels, activation, is_training, drop_rate, bnorm, name, bias):
+from tacotron.models.new_layers import *
+
+def conv1d(input_data, kernel_size, channels, activation, is_training, drop_rate, bnorm, name, bias=True):
     assert bnorm in ('before', 'after')
     if bnorm == 'before':
         input_data = BatchNormalization()(input_data)
@@ -27,15 +29,17 @@ class HighwayNet:
         
         mul = Multiply(name='{}_mul'.format(self.name))([H, T])
         
-        return Add(name='{}_add'.format(self.name))([mul, (1. - T)])
+        sous = Lambda(lambda x: 1. - x)(T)
+        
+        return Add(name='{}_add'.format(self.name))([mul, sous])
 
 
 class CBHG:
     def __init__(self, K, conv_channels, pool_size, 
                  projections_channels, projection_kernel_size, 
                  n_highwaynet_layers, highway_units, 
-                 rnn_units, bnorm, is_training, name=None, conv_bias=True):
-        self.K = k
+                 rnn_units, bnorm, is_training, name=None, conv_bias=True, rnn_type='LSTM'):
+        self.K = K
         self.conv_channels = conv_channels
         self.conv_bias = conv_bias
         self.pool_size = pool_size
@@ -57,7 +61,7 @@ class CBHG:
             
         self.rnn_cell = Bidirectional(rnn_cell, name='{}_bidirectional_rnn'.format(self.name))
         
-    def __call__(self, inputs, input_lengths):
+    def __call__(self, inputs, debug=False):
         conv_bank = [conv1d(inputs, k, self.conv_channels, 'relu', self.is_training, 0., self.bnorm, '{}_conv1d_{}'.format(self.name, k), self.conv_bias) for k in range(1, self.K+1)]
         
         conv_outputs = Concatenate(axis=-1)(conv_bank)
@@ -73,10 +77,18 @@ class CBHG:
         if highway_input.shape[2] != self.highway_units:
             highway_input = Dense(self.highway_units, name='{}_shape_match'.format(self.name))(highway_input)
             
-        for highwaynet in self.highwaynet_layers:
+        for highwaynet in self.highway_layers:
             highway_input = highwaynet(highway_input)
             
         rnn_input = highway_input
+        
+        if debug:
+            print("input : {}".format(inputs.shape))
+            print("conv_outputs : {}".format(conv_outputs.shape))
+            print("proj1_output : {}".format(proj1_output.shape))
+            print("proj2_output : {}".format(proj2_output.shape))
+            print("highway_input : {}".format(highway_input.shape))
+            
         
         return self.rnn_cell(rnn_input)
         
@@ -154,6 +166,9 @@ class DecoderRNN:
     def build(self, input_shape):
         self._cell.build(input_shape)
         self._trainable_weights = self._cell._trainable_weights
+        
+    def compute_output_shape(self, inputs):
+      return self._cell.compute_output_shape(inputs)
         
     def get_initial_state(self, inputs):
       return self._cell.get_initial_state(inputs)

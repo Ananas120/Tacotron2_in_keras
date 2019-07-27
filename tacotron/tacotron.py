@@ -10,6 +10,7 @@ from tacotron.models.new_layers import *
 
 def build_tacotron(hp):
     is_training = True
+    post_condition = True
 
     input_text = Input(shape=(None,))
     embedding = Embedding(input_dim=100, output_dim=128)(input_text)
@@ -28,11 +29,13 @@ def build_tacotron(hp):
 
     decoder_lstm = DecoderRNN(is_training, layers=hp.decoder_layers, size=hp.decoder_lstm_units)
 
-    attention_layer = LocationSensitiveAttentionLayer(hp.attention_dim, filters=hp.attention_filters, kernel=hp.attention_kernel, rnn_cell=decoder_lstm, cumulate_weights=hp.cumulative_weights)
+    attention_layer = LocationSensitiveAttentionLayer(encoder_outputs, hp.attention_dim, filters=hp.attention_filters, kernel=hp.attention_kernel, rnn_cell=decoder_lstm, cumulate_weights=hp.cumulative_weights)
 
-    frame_projection = FrameProjection(hp.num_mels)
+    frame_projection = FrameProjection(hp.num_mels, name='decoder_output')
 
     stop_projection = StopProjection(is_training)
+
+
 
     decoder_cell = TacotronDecoderCell(
         prenet,
@@ -40,10 +43,32 @@ def build_tacotron(hp):
         frame_projection,
         stop_projection
     )
-    (frame_prediction, stop_prediction) = decoder_cell([encoder_outputs, input_decoder])
+    (frame_prediction, stop_prediction) = decoder_cell([encoder_outputs, input_decoder], debug=True)
+
+    decoder_output = frame_prediction
+
+    postnet = PostNet(is_training, hparams=hp, name='postnet_convolutions')
+
+    residual = postnet(decoder_output)
+
+    residual_projection = FrameProjection(hp.num_mels, name='postnet_projection')
+    projected_residual = residual_projection(residual)
+
+    mel_outputs = Add(name='mel_predictions')([decoder_output, projected_residual])
+
+    if post_condition: 
+        post_cbhg = CBHG(hp.cbhg_kernels, hp.cbhg_conv_channels, hp.cbhg_pool_size, [hp.cbhg_projection, hp.num_mels],
+                        hp.cbhg_projection_kernel_size, hp.cbhg_highwaynet_layers,
+                        hp.cbhg_highway_units, hp.cbhg_rnn_units, hp.batch_norm_position, is_training, name='CBHG_postnet')
+
+        post_outputs = post_cbhg(mel_outputs, debug=True)
+
+        linear_specs_projection = FrameProjection(hp.num_freq, name='linear_spectrogram_projection')
+
+        linear_outputs = linear_specs_projection(post_outputs)
 
     inputs = (input_text, input_decoder)
-    outputs = (frame_prediction, stop_prediction)
+    outputs = (mel_outputs, linear_outputs, stop_prediction)
     model = Model(inputs, outputs)
-    model.summary()
+    model.summary(150)
     return model
