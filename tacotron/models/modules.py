@@ -166,6 +166,7 @@ class DecoderRNN:
     def build(self, input_shape):
         self._cell.build(input_shape)
         self._trainable_weights = self._cell._trainable_weights
+        self.weights = self._cell.weights
         
     def compute_output_shape(self, inputs):
       return self._cell.compute_output_shape(inputs)

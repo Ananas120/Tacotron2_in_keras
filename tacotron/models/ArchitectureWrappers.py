@@ -10,6 +10,7 @@ from tensorflow.python.util import nest
 from tacotron.models.modules import *
 from tacotron.models.new_layers import *
 
+
 class TacotronEncoderCell:
     def __init__(self, convolutional_layers, lstm_layer):
         self._convolutions = convolutional_layers
@@ -46,6 +47,6 @@ class TacotronDecoderCell:
         cell_outputs = self._frame_projection(projections_input)
         stop_tokens = self._stop_projection(projections_input)
                         
-        return cell_outputs, stop_tokens
+        return cell_outputs, stop_tokens, alignments
     
     

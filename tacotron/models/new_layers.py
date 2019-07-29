@@ -6,7 +6,6 @@ from keras.layers import *
 from tensorflow.python.framework.tensor_shape import *
 from tensorflow.python.ops import rnn_cell_impl, array_ops, math_ops
 
-
 class ZoneoutLSTMCell(Layer):
     def __init__(self, units, is_training=False, 
                  zoneout_factor_cell=0., 
@@ -30,10 +29,6 @@ class ZoneoutLSTMCell(Layer):
         self._cell = LSTMCell(units, name=self.name, **kwargs)
         self.is_training = is_training
         self.state_is_tuple = state_is_tuple
-        
-        #self.states = self._cell.states
-        #self.return_sequences = self._cell.return_sequences
-        #self.return_state = self._cell.return_state
         
         self.drop_c = Dropout(1 - self._zoneout_cell)
         self.drop_h = Dropout(1 - self._zoneout_outputs)
@@ -98,8 +93,8 @@ class LocationSensitiveAttentionLayer(Layer):
         self.memory_layer = Dense(units, use_bias=False)
         self.rnn_cell = rnn_cell
         
-        self.values = memory
-        self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
+        self.values = None #memory
+        self.keys = None #self.memory_layer(self.values) if self.memory_layer else self.values
     
     def build(self, input_shape):
         assert isinstance(input_shape, list)
@@ -113,11 +108,11 @@ class LocationSensitiveAttentionLayer(Layer):
                                    initializer='uniform',
                                    trainable=True)
         if self.memory_layer:
+            self.memory_layer.build(enc_out_seq)
             self._trainable_weights += self.memory_layer._trainable_weights
         if self.query_layer:
             if not self.query_layer.built: 
                 if self.rnn_cell:
-                    print(self.rnn_cell.compute_output_shape(dec_out_seq))
                     self.query_layer.build(self.rnn_cell.compute_output_shape(dec_out_seq)[0])
                 else:
                     self.query_layer.build(dec_out_seq)
@@ -125,7 +120,8 @@ class LocationSensitiveAttentionLayer(Layer):
         if self.rnn_cell:
             rnn_input_shape = (enc_out_seq[0], 1, dec_out_seq[-1] + enc_out_seq[-1])
             self.rnn_cell.build(rnn_input_shape)
-            self._trainable_weights += self.rnn_cell._trainable_weights
+            self._trainable_weights += self.rnn_cell.weights
+            
         
         conv_input_shape = (enc_out_seq[0], enc_out_seq[1], 1)
         location_input_shape = (enc_out_seq[0], enc_out_seq[1], self.filters)
@@ -144,6 +140,10 @@ class LocationSensitiveAttentionLayer(Layer):
         """
         assert isinstance(inputs, list)
         encoder_out_seq, decoder_out_seq = inputs
+        if self.values is None or self.values is not encoder_out_seq:
+            print("Je remplace self.values : {} par : {}".format(self.values, encoder_out_seq))
+            self.values = encoder_out_seq
+            self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
         encoder_out_seq = self.values
         keys = self.keys
         if verbose:
