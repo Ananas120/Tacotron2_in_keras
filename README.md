@@ -4,13 +4,13 @@ This is an implementation of Tacotron-2 architecture in Keras.
 It's based on the implementation (in tensorflow) of this repository : 
 https://github.com/Rayhane-mamah/Tacotron-2
 The implementation is not not done yet : 
-[x] Attention mechanism (LocationSensitiveAttention) : Done (*) (**) (***)
-[x] ZoneoutLSTM : Done (*)
-[x] Different blocks of Tacotron model : Done (*)
-[x] preprocessing
-[_] training
-[_] prediction
-[_] Wavenet (it seems too difficult in Keras)
+- [x] Attention mechanism (LocationSensitiveAttention) : Done (*) (**) (***)
+- [x] ZoneoutLSTM : Done (*)
+- [x] Different blocks of Tacotron model : Done (*)
+- [x] preprocessing
+- [_] training
+- [_] prediction
+- [_] Wavenet (it seems too difficult in Keras)
 * these points are done and compile correctly but not sure they are correct, if anyone can confirm
 
 ** in the tensorflow implementation, the context vector is concatenated with DecoderRNN (DecoderRNN is a StackedRNNCells(...)) so, to do it, i add the cell directly into the attention_mechanism so that i can do all steps at a time (because the AttentionLayer is not a RNN instance but a Layer and uses K.rnn to iterates over decoder_timesteps and then produce all e_i and c_i). 
