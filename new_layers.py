@@ -36,7 +36,7 @@ class ZoneoutLSTMCell(Layer):
     def build(self, input_shape):
         self._cell.build(input_shape)
         self._trainable_weights += self._cell._trainable_weights
-        self.built = True
+        super(ZoneoutLSTMCell, self).build(input_shape)
         
     def get_config(self):
         config = self._cell.get_config()
@@ -70,18 +70,18 @@ class ZoneoutLSTMCell(Layer):
         if self.is_training:
             drop_c = self.drop_c(new_c - prev_c)
             drop_h = self.drop_h(new_h - prev_h)
-            c = (1 - self._zoneout_cell) * drop_c + prev_c
-            h = (1 - self._zoneout_outputs) * drop_h + prev_h
+            c = (1. - self._zoneout_cell) * drop_c + prev_c
+            h = (1. - self._zoneout_outputs) * drop_h + prev_h
         else:
-            c = (1 - self._zoneout_cell) * new_c + self._zoneout_cell * prev_c
-            h = (1 - self._zoneout_outputs) * new_h + self._zoneout_outputs * prev_h
+            c = (1. - self._zoneout_cell) * new_c + self._zoneout_cell * prev_c
+            h = (1. - self._zoneout_outputs) * new_h + self._zoneout_outputs * prev_h
             
         return output, [c, h]
 
 
         
 class LocationSensitiveAttentionLayer(Layer):
-    def __init__(self, memory, units, filters, rnn_cell=None, kernel=3, smoothing=False, cumulate_weights=True, **kwargs):
+    def __init__(self, units, filters, rnn_cell=None, kernel=3, smoothing=False, cumulate_weights=True, **kwargs):
         super(LocationSensitiveAttentionLayer, self).__init__(**kwargs)
         self.units = units
         self.filters = filters
@@ -141,11 +141,11 @@ class LocationSensitiveAttentionLayer(Layer):
         assert isinstance(inputs, list)
         encoder_out_seq, decoder_out_seq = inputs
         if self.values is None or self.values is not encoder_out_seq:
-            print("Je remplace self.values : {} par : {}".format(self.values, encoder_out_seq))
+            print("Remplacing self.values : {} by : {}".format(self.values, encoder_out_seq))
             self.values = encoder_out_seq
             self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
-        encoder_out_seq = self.values
-        keys = self.keys
+        values = encoder_out_seq
+        keys = self.memory_layer(values) if self.memory_layer else values
         if verbose:
             print("encoder_out_seq shape (batch_size, input_timesteps, encoder_size): {}".format(encoder_out_seq.shape))
             print("decoder_out_seq shape (batch_size, last_outputs_timesteps, decoder_size): {}".format(decoder_out_seq.shape))
@@ -191,8 +191,8 @@ class LocationSensitiveAttentionLayer(Layer):
                 print("processed_location_features : {}".format(processed_location_features.shape))
                 
             
-            e_i = K.sum(self.v_a * K.tanh(self.keys + processed_query + processed_location_features + self.b_a), [2])
-            e_i = K.softmax(e_i)
+            e_i = K.sum(self.v_a * K.tanh(keys + processed_query + processed_location_features + self.b_a), [2])
+            e_i = K.exp(e_i) / K.sum(K.exp(e_i)) + K.epsilon()
             
             if self._cumulate:
                 next_state = e_i + previous_alignments
@@ -217,7 +217,7 @@ class LocationSensitiveAttentionLayer(Layer):
             if verbose:
                 print("expanded_alignments : {}".format(expanded_alignments.shape))
             
-            c_i = math_ops.matmul(expanded_alignments, self.values)
+            c_i = math_ops.matmul(expanded_alignments, values)
             c_i = K.squeeze(c_i, 1)
             
             if verbose:
@@ -237,8 +237,8 @@ class LocationSensitiveAttentionLayer(Layer):
             fake_input = K.expand_dims(fake_input, 1)
             return fake_input
 
-        fake_state_c = create_initial_state(self.values, self.values.shape[-1])
-        fake_state_e = create_initial_state(self.values, K.shape(self.values)[1])
+        fake_state_c = create_initial_state(values, values.shape[-1])
+        fake_state_e = create_initial_state(values, K.shape(values)[1])
         if self.rnn_cell:
             cell_initial_state = self.rnn_cell.get_initial_state(get_fake_cell_input(fake_state_c))
             initial_states_e = [fake_state_e, fake_state_c, *cell_initial_state]

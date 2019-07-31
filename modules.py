@@ -1,10 +1,10 @@
 
 from keras.layers import *
 
-from tacotron.models.new_layers import *
+from new_layers import *
 
 def conv1d(input_data, kernel_size, channels, activation, is_training, drop_rate, bnorm, name, bias=True):
-    assert bnorm in ('before', 'after')
+    assert bnorm in ('before', 'after', 'never')
     if bnorm == 'before':
         input_data = BatchNormalization()(input_data)
     
@@ -175,7 +175,7 @@ class DecoderRNN:
       return self._cell.get_initial_state(inputs)
         
     def __call__(self, inputs, initial_state):
-        return self._cell(inputs, initial_state)
+        return self._cell(inputs, initial_state=initial_state)
     
 class FrameProjection:
     def __init__(self, shape=80, activation=None, name=None):
@@ -196,7 +196,7 @@ class StopProjection:
         self.activation = activation
         
         self.name = 'Stop_token_projection' if name is None else name
-        self.dense = Dense(shape, activation=activation, name=self.name)
+        self.dense = Dense(shape, activation=self.activation, name=self.name)
         
     def __call__(self, inputs):
         return self.dense(inputs)
