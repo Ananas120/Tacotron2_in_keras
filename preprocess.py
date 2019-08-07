@@ -92,7 +92,7 @@ def run_preprocess(args, hparams):
 def main():
     print('initializing preprocessing...')
     parser = argparse.ArgumentParser()
-    parser.add_argument('--base_dir', default='D:/datasets/SIWIS/fr')
+    parser.add_argument('--base_dir', default='')
     parser.add_argument('--hparams', default='',
                         help='Hyperparameter overrides as a comma-separated list of name=value pairs')
     parser.add_argument('--dataset', default='SIWIS')

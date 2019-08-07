@@ -48,7 +48,7 @@ def build_son_from_fft(temporal_fft, rate=44100):
     return Son(array, rate)
 
 def build_son_from_stft(fourrier, hp):
-    return istft(fourrier, fs=hp.sample_rate, noverlap=hp.hop_size, nperseg=hp.win_size, nfft=hp.n_fft)
+    return istft(fourrier, fs=hp.sample_rate, noverlap=hp.hop_size, nperseg=hp.win_size, nfft=hp.n_fft)[-1]
     
 class Son(object):
     def __init__(self, array, rate):

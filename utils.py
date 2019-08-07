@@ -90,7 +90,7 @@ def word_code_to_string(code, vocab, min_code=3):
             string.append(vocab.at[c-min_code, 'mot'])
     return " ".join(string)
 
-                    
+
 class Pthread(Thread):
     def __init__(self, fonction, *args, **kwargs):
         Thread.__init__(self)
@@ -101,3 +101,26 @@ class Pthread(Thread):
     def run(self):
         self.fonction(*self.args, **self.kwargs)
         
+class DataWindow(object):
+    def __init__(self, window_length=100, data=[]):
+        self.window_length = window_length
+        self.buffer = data
+        
+    def append(self, value):
+        self.buffer.append(value)
+            
+    def mean(self):
+        data_len = min(self.window_length, len(self.buffer))
+        if data_len == 0: return float("inf")
+        return np.mean(np.array(self.buffer[-data_len:]))
+    
+    def max(self):
+        data_len = min(self.window_length, len(self.buffer))
+        return np.max(np.array(self.buffer[-data_len:]))
+
+    def min(self):
+        data_len = min(self.window_length, len(self.buffer))
+        return np.min(np.array(self.buffer[-data_len:]))
+    
+    def get_data(self):
+        return self.buffer

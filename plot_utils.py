@@ -63,7 +63,7 @@ def plot_multiple(liste_y, liste_labels=None, figsize=(7,4),
         plt.show()
     plt.close()
 
-def plot_spectrogram(spectrogram, auto_aspect=True, figsize=(10, 8), fontsize=30, filename=None, show=False):
+def plot_spectrogram(spectrogram, auto_aspect=True, figsize=(10, 8), fontsize=30, title="Spectrogram", filename=None, show=False, target_spectrogram=None):
     nrows = 2 if target_spectrogram is not None else 1
     fig, ax = plt.subplots(nrows=nrows, figsize=figsize)
     
@@ -80,7 +80,7 @@ def plot_spectrogram(spectrogram, auto_aspect=True, figsize=(10, 8), fontsize=30
 
     plt.tight_layout()
     if filename is not None:
-        plt.savefig(filename)
+        plt.savefig(filename, format='png')
         if show: plt.show()
     else:
         plt.show()
@@ -92,7 +92,7 @@ def plot_alignment(alignment, filename=None, title=None, fontsize=30, max_len=No
 
     fig = plt.figure(figsize=figsize)
     
-    im = plt.imshow(alignment,
+    im = plt.imshow(np.transpose(alignment),
                    aspect='auto',
                    origin='lower',
                    interpolation='none')
@@ -103,7 +103,7 @@ def plot_alignment(alignment, filename=None, title=None, fontsize=30, max_len=No
     plt.ylabel('Encoder timestep', fontsize=fontsize)
     plt.tight_layout()
     if filename is not None:
-        plt.savefig(path, format='png')
+        plt.savefig(filename, format='png')
         if show: plt.show()
     else:
         plt.show()

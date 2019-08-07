@@ -43,13 +43,13 @@ def build_from_siwis_path(hparams, siwis_dir, mel_dir, linear_dir, wav_dir, n_jo
             if not multi_processing:
                 if index % 500 == 0:
                     print("Preprocessing de l'audio n°{}".format(index))
-                result = _process_utterance(mel_dir, linear_dir, wav_dir, basename, fichier_wav, phrase, hparams)
-                if result is not None: 
+                result = _process_utterance(mel_dir, linear_dir, wav_dir, basename, fichier_wav, phrase, hparams, step_factor = 44100 // hparams.sample_rate)
+                if result is not None:
                     resultats.append(result)
                 else:
                     print("Resultat n°{} vaut None !".format(index))
             else:
-                futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, fichier_wav, phrase, hparams)))
+                futures.append(executor.submit(partial(_process_utterance, mel_dir, linear_dir, wav_dir, basename, fichier_wav, phrase, hparams, 44100 // hparams.sample_rate)))
             index += 1
 	
     # optimization purposes and it can be omited
@@ -93,7 +93,7 @@ def build_from_path(hparams, input_dirs, mel_dir, linear_dir, wav_dir, n_jobs=12
     return [future.result() for future in tqdm(futures) if future.result() is not None]
 
 
-def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hparams):
+def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hparams, step_factor=1):
     """
 	Preprocesses a single utterance wav/text pair
 
@@ -114,7 +114,8 @@ def _process_utterance(mel_dir, linear_dir, wav_dir, index, wav_path, text, hpar
 	"""
     try:
 		# Load the audio as numpy array
-        wav = audio.load_wav(wav_path, sr=hparams.sample_rate)
+        wav = audio.load_wav(wav_path, sr=hparams.sample_rate * step_factor)
+        if step_factor > 1: wav = wav[::step_factor]
         audio_time = len(wav) / hparams.sample_rate
     except FileNotFoundError: #catch missing wav exception
         print('file {} present in csv metadata is not present in wav folder. skipping!'.format(wav_path))

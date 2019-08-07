@@ -116,15 +116,8 @@ def build_tacotron_model(hp, vocab_size, is_training=True, debug=False):
 
     encoder_model = Model(inputs=input_text, outputs=encoder_outputs, name="Encoder")
 
-    decoder_model = Model(inputs=[input_decoder_from_encoder, input_decoder], outputs=[mel_outputs, linear_outputs, stop_prediction, weights], name="Decoder")
+    decoder_model = Model(inputs=[input_decoder_from_encoder, input_decoder], 
+                          outputs=[decoder_output, mel_outputs, linear_outputs, stop_prediction, weights], 
+                          name="Decoder")
 
-
-    new_input_encoder = Input(shape=(None,))
-    new_input_decoder = Input(shape=(None, hp.num_mels * hp.outputs_per_step))
-
-    encoder_out = encoder_model(new_input_encoder)
-    mel_out, linear_out, stop_token_out, _ = decoder_model([encoder_out, new_input_decoder])
-
-    model = Model(inputs=[new_input_encoder, new_input_decoder], outputs=[mel_out, linear_out, stop_token_out])
-
-    return model, encoder_model, decoder_model
+    return encoder_model, decoder_model

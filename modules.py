@@ -38,7 +38,7 @@ class CBHG:
     def __init__(self, K, conv_channels, pool_size, 
                  projections_channels, projection_kernel_size, 
                  n_highwaynet_layers, highway_units, 
-                 rnn_units, bnorm, is_training, name=None, conv_bias=True, rnn_type='LSTM'):
+                 rnn_units, bnorm, is_training, name=None, conv_bias=True, rnn_type='GRU'):
         self.K = K
         self.conv_channels = conv_channels
         self.conv_bias = conv_bias
@@ -123,13 +123,17 @@ class EncoderRNN:
         self._fw_cell = RNN(ZoneoutLSTMCell(size, is_training, zoneout_factor_cell=zoneout, zoneout_factor_output=zoneout), return_sequences=True, name='{}_fw_lstm'.format(self.name))
         
         self._bw_cell = RNN(ZoneoutLSTMCell(size, is_training, zoneout_factor_cell=zoneout, zoneout_factor_output=zoneout), go_backwards=True, return_sequences=True, name='{}_bw_lstm'.format(self.name))
-        
+                
     def __call__(self, inputs):
         fw_output = self._fw_cell(inputs)
         
         bw_output = self._bw_cell(inputs)
         
-        return Concatenate(axis=-1)([fw_output, bw_output])
+        output = Concatenate(axis=-1)([fw_output, bw_output])
+        
+        #output = Bidirectional(CuDNNLSTM(self.size, return_sequences=True))(inputs)
+        
+        return output
             
 class PreNet:
     def __init__(self, is_training, layers_sizes=[256, 256], drop_rate=0.5, activation='relu', name=None):
@@ -159,6 +163,7 @@ class DecoderRNN:
         self.zoneout = zoneout
         self.name = 'decoder_rnn' if name is None else name
         
+        #self.rnn_layers = [LSTMCell(size, name='{}_LSTM_{}'.format(self.name, i+1)) for i in range(layers)]
         self.rnn_layers = [ZoneoutLSTMCell(size, is_training, zoneout_factor_cell=zoneout, zoneout_factor_output=zoneout, name='{}_LSTM_{}'.format(self.name, i+1)) for i in range(layers)]
         
         self._cell = RNN(self.rnn_layers, return_state=True, return_sequences=True)
@@ -169,10 +174,10 @@ class DecoderRNN:
         self.weights = self._cell.weights
         
     def compute_output_shape(self, inputs):
-      return self._cell.compute_output_shape(inputs)
+        return self._cell.compute_output_shape(inputs)
         
     def get_initial_state(self, inputs):
-      return self._cell.get_initial_state(inputs)
+        return self._cell.get_initial_state(inputs)
         
     def __call__(self, inputs, initial_state):
         return self._cell(inputs, initial_state=initial_state)

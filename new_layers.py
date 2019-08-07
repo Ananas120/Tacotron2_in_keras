@@ -6,75 +6,36 @@ from keras.layers import *
 from tensorflow.python.framework.tensor_shape import *
 from tensorflow.python.ops import rnn_cell_impl, array_ops, math_ops
 
-class ZoneoutLSTMCell(Layer):
+class ZoneoutLSTMCell(LSTMCell):
     def __init__(self, units, is_training=False, 
                  zoneout_factor_cell=0., 
                  zoneout_factor_output=0., 
-                 state_is_tuple=True, 
-                 return_state=True, 
-                 return_sequences=True, 
-                 name=None,
                  **kwargs):
-        super(ZoneoutLSTMCell, self).__init__()
+        super(ZoneoutLSTMCell, self).__init__(units, **kwargs)
         zm = min(zoneout_factor_output, zoneout_factor_cell)
         zs = max(zoneout_factor_output, zoneout_factor_cell)
         
         if zm < 0. or zs > 1.:
             raise ValueError('One / both provided zoneoutfacotrs are not in [0, 1]')
            
-        self.name = 'zoneout_lstm' if name is None else name
-        self.units = units
         self._zoneout_cell = zoneout_factor_cell
         self._zoneout_outputs = zoneout_factor_output
-        self._cell = LSTMCell(units, name=self.name, **kwargs)
-        self.is_training = is_training
-        self.state_is_tuple = state_is_tuple
-        
-        self.drop_c = Dropout(1 - self._zoneout_cell)
-        self.drop_h = Dropout(1 - self._zoneout_outputs)
-        
-    def build(self, input_shape):
-        self._cell.build(input_shape)
-        self._trainable_weights += self._cell._trainable_weights
-        super(ZoneoutLSTMCell, self).build(input_shape)
-        
+                
     def get_config(self):
-        config = self._cell.get_config()
-        config['units'] = self.units
+        config = super(ZoneoutLSTMCell, self).get_config()
         config['zoneout_factor_cell'] = self._zoneout_cell
         config['zoneout_factor_output'] = self._zoneout_outputs
         return config
-    
-    def get_initial_state(self, inputs):
-        return self._cell.get_initial_state(inputs)
-        
-    def compute_output_shape(self, input_shape):
-        return self._cell.compute_output_shape(input_shape)
-        
-    @property
-    def state_size(self):
-        return self._cell.state_size
-    
-    @property
-    def output_size(self):
-        return self._cell.output_size
-    
+                
     def call(self, inputs, state, **kwargs):
-        output, new_state = self._cell.call(inputs, state)
-        if self.state_is_tuple:
-            (prev_c, prev_h) = state
-            (new_c, new_h) = new_state
-        else:
-            raise ValueError("state_is_tuple is not True")
+        output, new_state = super(ZoneoutLSTMCell, self).call(inputs, state)
+        (prev_c, prev_h) = state
+        (new_c, new_h) = new_state
 
-        if self.is_training:
-            drop_c = self.drop_c(new_c - prev_c)
-            drop_h = self.drop_h(new_h - prev_h)
-            c = (1. - self._zoneout_cell) * drop_c + prev_c
-            h = (1. - self._zoneout_outputs) * drop_h + prev_h
-        else:
-            c = (1. - self._zoneout_cell) * new_c + self._zoneout_cell * prev_c
-            h = (1. - self._zoneout_outputs) * new_h + self._zoneout_outputs * prev_h
+        drop_c = K.dropout(new_c - prev_c, self._zoneout_cell)
+        drop_h = K.dropout(new_h - prev_h, self._zoneout_outputs)
+        c = (1. - self._zoneout_cell) * drop_c + prev_c
+        h = (1. - self._zoneout_outputs) * drop_h + prev_h
             
         return output, [c, h]
 
@@ -140,10 +101,10 @@ class LocationSensitiveAttentionLayer(Layer):
         """
         assert isinstance(inputs, list)
         encoder_out_seq, decoder_out_seq = inputs
-        if self.values is None or self.values is not encoder_out_seq:
-            print("Remplacing self.values : {} by : {}".format(self.values, encoder_out_seq))
-            self.values = encoder_out_seq
-            self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
+        #if self.values is None or self.values is not encoder_out_seq:
+        #    print("Remplacing self.values : {} by : {}".format(self.values, encoder_out_seq))
+        #    self.values = encoder_out_seq
+        #    self.keys = self.memory_layer(self.values) if self.memory_layer else self.values
         values = encoder_out_seq
         keys = self.memory_layer(values) if self.memory_layer else values
         if verbose:
@@ -192,7 +153,7 @@ class LocationSensitiveAttentionLayer(Layer):
                 
             
             e_i = K.sum(self.v_a * K.tanh(keys + processed_query + processed_location_features + self.b_a), [2])
-            e_i = K.exp(e_i) / K.sum(K.exp(e_i)) + K.epsilon()
+            e_i = K.softmax(e_i) #K.exp(e_i) / K.sum(K.exp(e_i)) + K.epsilon()
             
             if self._cumulate:
                 next_state = e_i + previous_alignments
@@ -253,9 +214,11 @@ class LocationSensitiveAttentionLayer(Layer):
                                        decoder_out_seq, 
                                        initial_states_e)
         """ Computing context vectors """""
-        last_out, c_outputs, _ = K.rnn(context_step,
-                                       e_outputs,
-                                       [fake_state_c])
+        #last_out, c_outputs, _ = K.rnn(context_step,
+        #                               e_outputs,
+        #                               [fake_state_c])
+        c_outputs = math_ops.matmul(e_outputs, values)
+
 
         if verbose:
             print("energy outputs : {}".format(e_outputs.shape))
